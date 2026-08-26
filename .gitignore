@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+.ipynb_checkpoints/
+.venv/
+
+# Phillies-supplied trial data: kept local, never published.
+# Place k_2026.csv here, or point the scripts elsewhere with --data.
+data/
