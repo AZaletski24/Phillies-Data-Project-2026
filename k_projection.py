@@ -95,8 +95,14 @@ class Config:
     # --- position-player filter ---------------------------------------------
     # Position players mopping up in blowouts are in the raw FanGraphs dump.
     # Excluded from training, but still projected and flagged in the output.
-    stuff_floor: float = 60.0        # Stuff+ below this => not a real pitcher
-    pos_player_max_tbf: int = 30     # ...and only if usage is trivial
+    # Stuff+ separates the two populations cleanly on this panel: no pitcher
+    # reaching 100 BF has Stuff+ under 71.4, and no row above 30 BF falls in the
+    # 60-70 band at all. A floor of 70 therefore catches every position player
+    # without touching a genuine pitcher. The usage ceiling is a second guard,
+    # set well above any flagged row (max 54 BF) rather than at the boundary --
+    # at 30 BF it let position players with heavier mop-up duty through.
+    stuff_floor: float = 70.0        # Stuff+ below this => not a real pitcher
+    pos_player_max_tbf: int = 100    # ...and only below a genuine workload
 
     # --- minimum usage to enter model fitting (not prediction) --------------
     min_tbf_train: int = 25
@@ -161,7 +167,7 @@ def load_data(cfg: Config) -> pd.DataFrame:
     df["k_count"] = (df.k_pct * df.TBF).round().astype(int)
 
     # --- position-player flag ----------------------------------------------
-    df["is_pos_player"] = (df.stuff_plus < cfg.stuff_floor) & (df.TBF <= cfg.pos_player_max_tbf)
+    df["is_pos_player"] = (df.stuff_plus < cfg.stuff_floor) & (df.TBF < cfg.pos_player_max_tbf)
 
     return df.sort_values(["PlayerId", "Season"]).reset_index(drop=True)
 
@@ -210,7 +216,7 @@ def estimate_shrinkage_k(df: pd.DataFrame, cutoff: int, min_tbf: int = 25) -> di
         k = p_bar (1 - p_bar) / Var(true talent)
 
     The beta prior's effective sample size [6], measured from the panel rather
-    than assumed as in Marcel [1]. Returns k ~= 78 BF on 2021-2024.
+    than assumed as in Marcel [1]. Returns k ~= 77 BF on 2021-2024.
     """
     d = df[(df.Season <= cutoff) & (~df.is_pos_player) & (df.TBF >= min_tbf)]
     w = d.TBF.values
@@ -238,7 +244,7 @@ def estimate_shrinkage_k_informed(df: pd.DataFrame, cutoff: int, cfg: Config,
     Same decomposition as `estimate_shrinkage_k`, applied to the residuals that
     Stuff+ does not explain. Var(residual talent) < Var(total talent), so this k
     is larger than the flat-prior k: a more informative prior earns more weight.
-    Returns k ~= 150 BF against 78 for the flat prior.
+    Returns k ~= 136 BF against 77 for the flat prior.
     """
     d = df[(df.Season <= cutoff) & (~df.is_pos_player) & (df.TBF >= cfg.min_tbf_train)].copy()
     w = d.TBF.values.astype(float)
@@ -339,7 +345,7 @@ def fit_aging_curve(df: pd.DataFrame, cutoff: int, lg: pd.DataFrame,
 def emp_logit(k: np.ndarray, n: np.ndarray) -> np.ndarray:
     """Empirical logit, log((K + 0.5) / (TBF - K + 0.5)).
 
-    The Haldane-Anscombe correction keeps the 308 player-seasons at exactly 0%
+    The Haldane-Anscombe correction keeps the 306 player-seasons at exactly 0%
     or 100% K% finite.
     """
     return np.log((k + 0.5) / (n - k + 0.5))
@@ -550,7 +556,7 @@ def fit_prior_calibration(df: pd.DataFrame, cutoff: int, cfg: Config,
 
     Fits a + b*prior_logit against next season's empirical logit, BF-weighted,
     seasons <= cutoff. The contemporaneous prior is over-dispersed when applied
-    forward (slope b ~= 0.73); without this correction the informed prior
+    forward (slope b ~= 0.75); without this correction the informed prior
     performs worse than a flat one. See the methodology report.
     """
     from sklearn.linear_model import LinearRegression
@@ -946,6 +952,10 @@ def make_figures(df: pd.DataFrame, cfg: Config, bt: pd.DataFrame,
         s = cache[last_scored].scored
         s = s[(~s.is_pos_player) & (s.tbf_actual >= 100)]
     else:
+        # Neither a holdout frame nor a backtest cache: nothing to plot. Bind
+        # last_scored anyway so the guarded block below cannot reference it
+        # unbound if that guard is ever loosened.
+        last_scored = cfg.target_season
         s = pd.DataFrame()
     if len(s) > 40:
         fig, axes = plt.subplots(1, 2, figsize=(9.4, 4.0))
@@ -1292,6 +1302,7 @@ def main():
 
     # ---------- scoring against the held-out target season -------------------
     holdout = None
+    h = None                     # stays None when the target season is absent
     if cfg.target_season in df.Season.values:
         act = (df[df.Season == cfg.target_season][["PlayerId", "k_pct", "TBF"]]
                .rename(columns={"k_pct": "y_true", "TBF": "tbf_actual"}))
@@ -1342,7 +1353,7 @@ def main():
 
     figs = make_figures(df, cfg, bt, cache, feat, res["aging"],
                         res["lg"], res["k_est"], tag,
-                        holdout_df=(h if cfg.target_season in df.Season.values else None))
+                        holdout_df=h)
     print(f"\n[9] Figures: {', '.join(f.name for f in figs)}")
 
     manifest = {

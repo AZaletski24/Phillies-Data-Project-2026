@@ -220,15 +220,17 @@ def build_report(target_season: int, out_dir: Path, manifest: dict,
 
     story.append(Paragraph("2.3. Data Filtering", h2))
     story.append(Paragraph(
-        "Roughly 6% of rows are position players mopping up in blowouts, including Whit "
+        "Roughly 7% of rows are position players mopping up in blowouts, including Whit "
         "Merrifield, Andrelton Simmons, Isiah Kiner-Falefa, and Travis Jankowski. Their "
         "Stuff+ values run as low as -46 against a league average of 100, and they strike "
-        "out 2.6% of batters against a league rate of 22.6%. Collectively they account for "
-        "only 0.24% of all batters faced, but left in the training data they distort both "
+        "out 2.7% of batters against a league rate of 22.6%. Collectively they account for "
+        "only 0.30% of all batters faced, but left in the training data they distort both "
         "the talent variance estimate in Section 2.4 and the fitted prior in Section 2.6. "
-        "I identify them as rows combining a Stuff+ below 60 with 30 or fewer batters "
-        "faced, exclude them from all model fitting, and flag rather than delete them in "
-        "the output file so that nothing silently disappears from the deliverable.", body))
+        "I identify them by a Stuff+ below 70, the two populations being cleanly separated "
+        "on this panel: no pitcher reaching 100 batters faced has a Stuff+ under 71.4, and "
+        "no season above 30 batters faced falls in the 60-to-70 band at all. I exclude them "
+        "from all model fitting, and flag rather than delete them in the output file so that "
+        "nothing silently disappears from the deliverable.", body))
     story.append(Paragraph(
         "A minimum of 25 batters faced is also required for a player-season to enter model "
         "fitting. No filter is applied to which pitchers receive a projection.", body))
@@ -318,8 +320,8 @@ def build_report(target_season: int, out_dir: Path, manifest: dict,
     story.append(Paragraph(
         "Fitted naively, this made the model worse. A prior learned on same-season data is "
         "over-dispersed when applied to the following season. Regressing the prior against "
-        "next season's outcome returns a calibration slope of 0.73, meaning the raw prior "
-        "spreads pitchers about 30% further from league average than next-season results "
+        "next season's outcome returns a calibration slope of 0.75, meaning the raw prior "
+        "spreads pitchers about 25% further from league average than next-season results "
         "justify. Two mechanisms drive this, and both are real. Stuff+ measured over a "
         "handful of appearances is itself a noisy sample, so part of its cross-sectional "
         "spread is measurement error. More importantly, there is selection: a pitcher with "
@@ -342,7 +344,7 @@ def build_report(target_season: int, out_dir: Path, manifest: dict,
     story.append(Paragraph(
         f"League strikeout percentage is not constant. Across the training window it fell "
         f"from {lgobs.lg_k_pct.iloc[0]*100:.2f}% to {lgobs.lg_k_pct.iloc[-1]*100:.2f}%, and "
-        f"I project {manifest["league_k_projected"]*100:.2f}% for {T} using a trend damped halfway toward "
+        f"I project {manifest['league_k_projected']*100:.2f}% for {T} using a trend damped halfway toward "
         f"the most recent observed value. The damping is deliberate. League level rate "
         f"trends mean-revert more than a naive slope implies, and an undamped multi-season "
         f"slope projected forward is a well known way to manufacture drift.", body))
@@ -415,7 +417,7 @@ def build_report(target_season: int, out_dir: Path, manifest: dict,
         f"the entire pipeline twice: once on the file as delivered, and once on a copy with "
         f"all 873 rows of {T} physically deleted. It then compares the two projection "
         f"tables. The two runs are identical, with a maximum absolute difference of "
-        f"0.00e+00 across all {manifest["n_projections"]:,} projections and all numeric columns. "
+        f"0.00e+00 across all {manifest['n_projections']:,} projections and all numeric columns. "
         f"If any fitted object anywhere in the pipeline were reading {T}, the two runs would "
         f"diverge.", body))
 
@@ -563,7 +565,7 @@ def build_report(target_season: int, out_dir: Path, manifest: dict,
         "against the held-out season, and generates every figure and table reproduced in "
         "this document. Running python k_projection.py --self-test performs the leakage "
         "verification described in Section 3.2. Outputs include "
-        f"k_pct_projections_{T}.csv, containing {manifest["n_projections"]:,} projections with "
+        f"k_pct_projections_{T}.csv, containing {manifest['n_projections']:,} projections with "
         f"80% prediction intervals and per-pitcher reliability weights; backtest_{T}.csv; "
         f"ablation_{T}.csv; run_manifest_{T}.json, which records every fitted constant for "
         f"auditing; and five figures.", body))
